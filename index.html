@@ -1,0 +1,107 @@
+<html>
+
+<head>
+    <title>Blockchain Explorer</title>
+</head>
+
+<body>
+    <h1 id="name">Election Name</h1>
+    <table id="election" width=100%>
+        <tr>
+            <th align="left">Candidate</th>
+            <th align="left">Vote Count</th>
+            <th align="left">Vote</th>
+        </tr>
+
+    </table>
+
+
+    <!-- <script type="text/javascript" src="https://cdn.ethers.io/scripts/ethers-app-v0.2.min.js"></script> -->
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="./web3.min.js"></script>
+    <!-- <script src="https://cdn.ethers.io/scripts/ethers-app-v0.4.js" charset="utf-8" type="text/javascript"></script> -->
+    <script>
+
+        $(document).ready(function() {
+            // setProvider("http://localhost:7545");
+            setProvider();
+            initTable();
+            eventHandler();
+        });
+
+        function setProvider(url="") {
+            if (typeof web3 !== 'undefined' && url === "") {
+                web3 = new Web3(web3.currentProvider);
+                console.log("using existing web3");
+            } else {
+                // set the provider you want from Web3.providers
+                web3 = new Web3(new Web3.providers.HttpProvider(url));
+                console.log("using local web3");
+            }
+        }
+
+        function getContract(provider=web3) {
+            var address = "0xad227e6cd5f25ce36acf9ad0dac9c0aad1c8cf77";
+            var abi = [{ "anonymous": false, "inputs": [{ "indexed": false, "name": "candidateName", "type": "string" }, { "indexed": false, "name": "voteCount", "type": "uint256" }], "name": "ElectionVotes", "type": "event" }, { "constant": false, "inputs": [{ "name": "name", "type": "string" }], "name": "addCandidate", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": false, "inputs": [{ "name": "person", "type": "address" }], "name": "authorize", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": false, "inputs": [], "name": "end", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": false, "inputs": [{ "name": "voteIndex", "type": "uint256" }], "name": "vote", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "inputs": [{ "name": "_name", "type": "string" }], "payable": false, "stateMutability": "nonpayable", "type": "constructor" }, { "constant": true, "inputs": [{ "name": "", "type": "uint256" }], "name": "candidates", "outputs": [{ "name": "name", "type": "string" }, { "name": "voteCount", "type": "uint256" }], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "electionName", "outputs": [{ "name": "", "type": "string" }], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "getNumCandidate", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [], "name": "owner", "outputs": [{ "name": "", "type": "address" }], "payable": false, "stateMutability": "view", "type": "function" }, { "constant": true, "inputs": [{ "name": "", "type": "address" }], "name": "voters", "outputs": [{ "name": "authorized", "type": "bool" }, { "name": "voted", "type": "bool" }, { "name": "vote", "type": "uint256" }], "payable": false, "stateMutability": "view", "type": "function" }];
+            return new provider.eth.Contract(abi, address);
+        }
+
+        function initTable() {
+            var contract = getContract();
+
+            contract.methods.electionName().call().then(function(result) {
+                $('#name').html(result);
+            });
+
+            contract.methods.getNumCandidate().call().then(function(num) {
+                for(var i = 0; i < num; i++) {
+                    addCandidate(i);
+                }
+            })
+        }
+
+        function addCandidate(i) {
+            getContract().methods.candidates(i).call().then(function (c) {
+                var row = $("<tr></tr>");
+                row.append("<td>" + c.name + "</td>");
+                row.append("<td>" + c.voteCount + "</td>");
+                row.append('<td><button type="button" class="vote" data-index="' + i + '">Vote</button></td>');
+                $('#election').append(row);
+            });
+        }
+
+        $(document).on('click', ".vote", function(e) {
+            e.preventDefault(e);
+            var voteIndex = $(this).attr("data-index");
+
+            web3.eth.getAccounts().then(function(accounts) {
+                var acct = accounts[0];
+                console.log("acct: " + acct);
+                return getContract().methods.vote(voteIndex).send({ from: acct});
+            }).then(tx => {
+                console.log("tx: " + tx);
+                if(tx.events && tx.events.ElectionVotes) {
+                    var event = tx.events.ElectionVotes.returnValues;
+                    $("#election tr:contains('" + event.candidateName + "') td").eq(1).html(event.voteCount);
+                }
+            }).catch(err => console.log(err))
+
+        });
+
+        function eventHandler() {
+            var infura = "wss://rinkeby.infura.io/ws";
+            var infuraProvider = new Web3(new Web3.providers.WebsocketProvider(infura));
+
+            getContract(infuraProvider).events.ElectionVotes((err, event) => {
+                if (err) console.log(err);
+                console.log("Event received: " + event);
+            })
+        }
+
+
+
+
+    </script>
+</body>
+
+</html>
